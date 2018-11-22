@@ -1,0 +1,5 @@
+.vs/
+SharpServer/bin/Debug/
+SharpServer/bin/Release/
+SharpServer/obj/Debug/
+SharpServer/obj/Release/

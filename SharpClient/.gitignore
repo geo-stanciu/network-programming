@@ -1,0 +1,5 @@
+.vs/
+SharpClient/bin/Debug/
+SharpClient/bin/Release/
+SharpClient/obj/Debug/
+SharpClient/obj/Release/
