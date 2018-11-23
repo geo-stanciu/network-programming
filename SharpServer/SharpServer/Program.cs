@@ -8,8 +8,35 @@ namespace SharpServer
 {
     class Program
     {
+        // Big Thanks to https://stackoverflow.com/a/44942011
+
+        private const int port = 5678;
+
         static void Main(string[] args)
         {
+            ChatServer server = new ChatServer(port);
+
+            server.Status += (s, e) => Console.WriteLine(e.StatusText);
+
+            Task serverTask = _WaitForServer(server);
+
+            Console.WriteLine("Press return to shutdown server...");
+            Console.ReadLine();
+
+            server.Shutdown();
+            serverTask.Wait();
+        }
+
+        private static async Task _WaitForServer(ChatServer server)
+        {
+            try
+            {
+                await server.ListenTask;
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Server exception: {e}");
+            }
         }
     }
 }
