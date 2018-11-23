@@ -11,6 +11,8 @@ namespace SharpClient
 {
     class Program
     {
+        // Big Thanks to https://stackoverflow.com/a/44942011
+
         private const int port = 5678;
 
         static void Main(string[] args)

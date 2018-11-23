@@ -190,12 +190,14 @@ namespace SharpServer
             {
                 if (!lenReceived)
                 {
+                    totalRead += read;
                     offset += read;
 
                     if (offset >= max2read)
                     {
                         lenReceived = true;
                         offset = 0;
+                        totalRead = 0;
 
                         isCompressed = buffer[MAX_LEN] == 1;
 
