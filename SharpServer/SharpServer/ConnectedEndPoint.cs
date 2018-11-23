@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.IO.Compression;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -14,9 +15,11 @@ namespace SharpServer
     {
         private readonly object _lock = new object();
         private readonly Socket _socket;
-        private readonly StreamReader _reader;
-        private readonly StreamWriter _writer;
+        private readonly Stream _stream;
         private bool _closing;
+        private const int MAX_LEN = 10;
+        private const int MAX_BUFFER = 1024;
+        private const int MAX_UNCOMPRESSED = 256;
 
         /// <summary>
         /// Gets the address of the connected remote end-point
@@ -60,16 +63,50 @@ namespace SharpServer
         /// <summary>
         /// Write a line of text to the connection, sending it to the remote end-point
         /// </summary>
-        /// <param name="text">The line of text to write</param>
-        public void WriteLine(string text)
+        /// <param name="message">The message to send</param>
+        public void Send(string message)
         {
             lock (_lock)
             {
                 if (!_closing)
                 {
-                    _writer.WriteLine(text);
-                    _writer.Flush();
+                    bool shouldCompress = false;
+                    if (message.Length > MAX_UNCOMPRESSED)
+                        shouldCompress = true;
+
+                    byte[] buff = shouldCompress ? Compress(Encoding.UTF8.GetBytes(message)) : Encoding.UTF8.GetBytes(message);
+                    byte[] len = Encoding.UTF8.GetBytes(buff.Length.ToString().PadLeft(MAX_LEN, '0'));
+                    byte[] msg = new byte[len.Length + buff.Length + 1];
+
+                    Array.Copy(len, 0, msg, 0, len.Length);
+                    msg[len.Length] = Convert.ToByte(shouldCompress);
+                    Array.Copy(buff, 0, msg, len.Length + 1, buff.Length);
+
+                    _stream.Write(msg, 0, msg.Length);
+                    _stream.Flush();
                 }
+            }
+        }
+
+        private byte[] Compress(byte[] data)
+        {
+            using (var compressedStream = new MemoryStream())
+            using (var zipStream = new GZipStream(compressedStream, CompressionMode.Compress))
+            {
+                zipStream.Write(data, 0, data.Length);
+                zipStream.Close();
+                return compressedStream.ToArray();
+            }
+        }
+
+        private byte[] Decompress(byte[] data)
+        {
+            using (var compressedStream = new MemoryStream(data))
+            using (var zipStream = new GZipStream(compressedStream, CompressionMode.Decompress))
+            using (var resultStream = new MemoryStream())
+            {
+                zipStream.CopyTo(resultStream);
+                return resultStream.ToArray();
             }
         }
 
@@ -88,16 +125,7 @@ namespace SharpServer
         {
             try
             {
-                _reader.Dispose();
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine($"{e}");
-            }
-
-            try
-            {
-                _writer.Dispose();
+                _stream.Dispose();
             }
             catch (Exception e)
             {
@@ -122,9 +150,7 @@ namespace SharpServer
         private ConnectedEndPoint(Socket socket, Action<ConnectedEndPoint, string> readCallback)
         {
             _socket = socket;
-            Stream stream = new NetworkStream(_socket);
-            _reader = new StreamReader(stream, Encoding.UTF8, false, 1024, true);
-            _writer = new StreamWriter(stream, Encoding.UTF8, 1024, true);
+            _stream = new NetworkStream(_socket);
 
             ReadTask = _ConsumeSocketAsync(readCallback);
         }
@@ -141,13 +167,63 @@ namespace SharpServer
             }
         }
 
+        private int GetMin(int a, int b)
+        {
+            if (a < b)
+                return a;
+
+            return b;
+        }
+
         private async Task _ConsumeSocketAsync(Action<ConnectedEndPoint, string> callback)
         {
-            string line;
+            int read = 0;
+            int offset = 0;
+            int totalRead = 0;
+            int max2read = MAX_LEN + 1;
+            bool lenReceived = false;
+            bool isCompressed = false;
+            var buffer = new byte[MAX_BUFFER];
+            byte[] msg = null;
 
-            while ((line = await _reader.ReadLineAsync()) != null)
+            while ((read = await _stream.ReadAsync(buffer, offset, GetMin(buffer.Length, max2read - totalRead))) != 0)
             {
-                callback(this, line);
+                if (!lenReceived)
+                {
+                    offset += read;
+
+                    if (offset >= max2read)
+                    {
+                        lenReceived = true;
+                        offset = 0;
+
+                        isCompressed = buffer[MAX_LEN] == 1;
+
+                        var len = new byte[MAX_LEN];
+                        Array.Copy(buffer, 0, len, 0, len.Length);
+                        max2read = Int32.Parse(Encoding.UTF8.GetString(len));
+
+                        msg = new byte[max2read];
+                    }
+                }
+                else if (totalRead < max2read)
+                {
+                    Array.Copy(buffer, 0, msg, totalRead, read);
+                    totalRead += read;
+
+                    if (totalRead == max2read)
+                    {
+                        string message = Encoding.UTF8.GetString(isCompressed ? Decompress(msg) : msg);
+                        msg = null;
+
+                        totalRead = 0;
+                        max2read = MAX_LEN + 1;
+                        lenReceived = false;
+                        isCompressed = false;
+
+                        callback(this, message);
+                    }
+                }
             }
 
             _Shutdown(SocketShutdown.Both);

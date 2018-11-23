@@ -34,7 +34,7 @@ namespace SharpClient
 
                     while ((line = Console.ReadLine()) != "")
                     {
-                        server.WriteLine(line);
+                        server.Send(line);
                     }
 
                     server.Shutdown();

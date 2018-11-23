@@ -92,7 +92,7 @@ namespace SharpServer
             {
                 try
                 {
-                    client.WriteLine("Chat server is shutting down");
+                    client.Send("Chat server is shutting down");
                 }
                 catch (IOException e)
                 {
@@ -166,7 +166,7 @@ namespace SharpServer
                 {
                     try
                     {
-                        client.WriteLine(text);
+                        client.Send(text);
                     }
                     catch (IOException e)
                     {
