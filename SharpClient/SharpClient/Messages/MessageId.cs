@@ -4,6 +4,7 @@ namespace SharpClient.Messages
 {
     public enum MessageId
     {
-        Login = 1
+        Login = 1,
+        Text = 101
     }
 }

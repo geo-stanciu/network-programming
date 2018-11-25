@@ -1,4 +1,5 @@
-﻿using System;
+﻿using SharpServer.Messages;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -93,11 +94,19 @@ namespace SharpServer
                 clients = _clients.ToArray();
             }
 
+            var exitMsg = new MChatResponse
+            {
+                payload = new MChatPayload
+                {
+                    message = "Chat server is shutting down"
+                }
+            };
+
             foreach (ConnectedEndPoint client in clients)
             {
                 try
                 {
-                    client.Send("Chat server is shutting down");
+                    client.Send(exitMsg);
                 }
                 catch (IOException e)
                 {
@@ -158,23 +167,39 @@ namespace SharpServer
 
         private void _ClientReadLine(ConnectedEndPoint readClient, string text)
         {
-            if (readClient.IsLoggedIn)
-                _OnNewMessage(readClient, text);
-            else
-                _OnStatus($"Client {readClient.RemoteEndPoint}: \"{text}\"");
+            try
+            {
+                var msg = MIncommingMessage.Parse(text);
 
+                if (!readClient.IsLoggedIn && msg.pid != MessageId.Login)
+                    throw new Exception("Client not logged in.");
+                else if (readClient.IsLoggedIn && msg.pid == MessageId.Login)
+                    throw new Exception("Client already sent one login message.");
+
+                _OnNewMessage(readClient, msg);
+                _OnStatus($"Client {readClient.RemoteEndPoint}: \"{text}\"");
+            }
+            catch (Exception e)
+            {
+                _OnClientException(readClient, e.Message);
+                _RemoveClient(readClient);
+                readClient.Dispose();
+                return;
+            }
+        }
+
+        public void SendMessageToAllOthers(ConnectedEndPoint sender, MBasicMessage message)
+        {
             lock (_lock)
             {
                 if (_closing)
                     return;
 
-                text = $"{readClient.RemoteEndPoint}: {text}";
-
-                foreach (ConnectedEndPoint client in _clients.Where(c => c != readClient))
+                foreach (ConnectedEndPoint client in _clients.Where(c => c != sender))
                 {
                     try
                     {
-                        client.Send(text);
+                        client.Send(message);
                     }
                     catch (IOException e)
                     {
@@ -207,7 +232,7 @@ namespace SharpServer
             LogStatus?.Invoke(this, new StatusEventArgs(statusText));
         }
 
-        private void _OnNewMessage(ConnectedEndPoint client, string message)
+        private void _OnNewMessage(ConnectedEndPoint client, MIncommingMessage message)
         {
             OnNewMessage?.Invoke(this, new ClientMessageEventArgs(client, message));
         }

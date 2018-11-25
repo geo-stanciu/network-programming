@@ -1,4 +1,5 @@
-﻿using System;
+﻿using SharpClient.Messages;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -14,11 +15,31 @@ namespace SharpClient
         // Big Thanks to https://stackoverflow.com/a/44942011
 
         private const int port = 5678;
+        private static UserSession session = null;
 
         static void Main(string[] args)
         {
             IPEndPoint remoteEndPoint = new IPEndPoint(IPAddress.Loopback, port);
-            ConnectedEndPoint server = ConnectedEndPoint.Connect(remoteEndPoint, (c, s) => Console.WriteLine(s));
+            ConnectedEndPoint server = ConnectedEndPoint.Connect(remoteEndPoint, (c, s) => {
+                var iem = MIncommingMessage.Parse(s);
+
+                switch (iem.pid)
+                {
+                    case MessageId.Login:
+                        Console.WriteLine($"{iem.user} logged in");
+                        session = new UserSession { Username = iem.user, SID = iem.sid };
+                        c.Session = session;
+                        break;
+
+                    case MessageId.Text:
+                        Console.WriteLine(s);
+                        break;
+
+                    default:
+                        Console.WriteLine(s);
+                        break;
+                }
+            });
 
             _StartUserInput(server);
             _SafeWaitOnServerRead(server).Wait();
@@ -32,11 +53,32 @@ namespace SharpClient
             {
                 try
                 {
+                    var loginCmd = new MLoginCommand
+                    {
+                        payload = new MLoginPayload
+                        {
+                            username = "test1",
+                            password = "pass1"
+                        }
+                    };
+
+                    server.Send(loginCmd);
+
                     string line;
 
                     while ((line = Console.ReadLine()) != "")
                     {
-                        server.Send(line);
+                        var text = new MChatMessage
+                        {
+                            user = session.Username,
+                            sid = session.SID,
+                            payload = new MChatPayload
+                            {
+                                message = line
+                            }
+                        };
+
+                        server.Send(text);
                     }
 
                     server.Shutdown();

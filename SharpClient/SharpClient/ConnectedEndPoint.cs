@@ -1,4 +1,5 @@
-﻿using System;
+﻿using SharpClient.Messages;
+using System;
 using System.IO;
 using System.IO.Compression;
 using System.Net;
@@ -22,9 +23,25 @@ namespace SharpClient
         private readonly Stream _stream;
         private bool _closing;
 
-        public UserSession Session { get; set; } = null;
+        private UserSession _Session = null;
+        public UserSession Session
+        {
+            get
+            {
+                lock (_lock)
+                    return _Session;
+            }
+            set
+            {
+                lock (_lock)
+                {
+                    IsLoggedIn = value != null && !String.IsNullOrEmpty(value.Username) && !String.IsNullOrEmpty(value.SID);
+                    _Session = value;
+                }
+            }
+        }
 
-        public Boolean IsLoggedIn { get { return Session != null; } }
+        public Boolean IsLoggedIn { get; private set; } = false;
 
         /// <summary>
         /// Gets the address of the connected remote end-point
@@ -69,7 +86,12 @@ namespace SharpClient
         /// Write a line of text to the connection, sending it to the remote end-point
         /// </summary>
         /// <param name="message">The message to send</param>
-        public void Send(string message)
+        public void Send(MBasicMessage message)
+        {
+            _Send(message.ToString());
+        }
+
+        private void _Send(string message)
         {
             lock (_lock)
             {
@@ -139,7 +161,7 @@ namespace SharpClient
 
             try
             {
-                _socket.Close();
+                _socket.Shutdown(SocketShutdown.Both);
             }
             catch (Exception e)
             {
@@ -191,49 +213,58 @@ namespace SharpClient
             var buffer = new byte[MAX_BUFFER];
             byte[] msg = null;
 
-            while ((read = await _stream.ReadAsync(buffer, offset, GetMin(buffer.Length, max2read - totalRead))) != 0)
+            try
             {
-                if (!lenReceived)
+                while ((read = await _stream.ReadAsync(buffer, offset, GetMin(buffer.Length, max2read - totalRead))) != 0)
                 {
-                    totalRead += read;
-                    offset += read;
-
-                    if (offset >= max2read)
+                    if (!lenReceived)
                     {
-                        lenReceived = true;
-                        offset = 0;
-                        totalRead = 0;
+                        totalRead += read;
+                        offset += read;
 
-                        isCompressed = buffer[MAX_LEN] == 1;
+                        if (offset >= max2read)
+                        {
+                            lenReceived = true;
+                            offset = 0;
+                            totalRead = 0;
 
-                        var len = new byte[MAX_LEN];
-                        Array.Copy(buffer, 0, len, 0, len.Length);
-                        max2read = Int32.Parse(Encoding.UTF8.GetString(len));
+                            isCompressed = buffer[MAX_LEN] == 1;
 
-                        msg = new byte[max2read];
+                            var len = new byte[MAX_LEN];
+                            Array.Copy(buffer, 0, len, 0, len.Length);
+                            max2read = Int32.Parse(Encoding.UTF8.GetString(len));
+
+                            msg = new byte[max2read];
+                        }
                     }
-                }
-                else if (totalRead < max2read)
-                {
-                    Array.Copy(buffer, 0, msg, totalRead, read);
-                    totalRead += read;
-
-                    if (totalRead == max2read)
+                    else if (totalRead < max2read)
                     {
-                        string message = Encoding.UTF8.GetString(isCompressed ? Decompress(msg) : msg);
-                        msg = null;
+                        Array.Copy(buffer, 0, msg, totalRead, read);
+                        totalRead += read;
 
-                        totalRead = 0;
-                        max2read = MAX_LEN + 1;
-                        lenReceived = false;
-                        isCompressed = false;
+                        if (totalRead == max2read)
+                        {
+                            string message = Encoding.UTF8.GetString(isCompressed ? Decompress(msg) : msg);
+                            msg = null;
 
-                        callback(this, message);
+                            totalRead = 0;
+                            max2read = MAX_LEN + 1;
+                            lenReceived = false;
+                            isCompressed = false;
+
+                            callback(this, message);
+                        }
                     }
                 }
             }
-
-            _Shutdown(SocketShutdown.Both);
+            catch (Exception e)
+            {
+                Console.WriteLine($"{e}");
+            }
+            finally
+            {
+                _Shutdown(SocketShutdown.Both);
+            }
         }
     }
 }

@@ -1,13 +1,12 @@
 ﻿using Newtonsoft.Json;
 using System;
 
-namespace SharpClient.Messages
+namespace SharpServer.Messages
 {
-    public class MBasicMessage
+    public class MBasicResponse : MBasicMessage
     {
-        public MessageId pid { get; set; }
-        public string user { get; set; }
-        public string sid { get; set; }
+        public bool err { get; set; } = false;
+        public string serr { get; set; } = "";
 
         public new string ToString()
         {

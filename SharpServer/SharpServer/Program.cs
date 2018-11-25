@@ -1,4 +1,5 @@
-﻿using System;
+﻿using SharpServer.Messages;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -23,7 +24,35 @@ namespace SharpServer
 
             server.OnNewMessage += (s, e) =>
             {
-                Console.WriteLine($"{e.Client.Session.Username}: {e.Message}");
+                switch (e.Message.pid)
+                {
+                    case MessageId.Login:
+                        var login = e.Message.content as MLoginPayload;
+                        var loginRes = new MLoginResponse
+                        {
+                            user = login.username,
+                            sid = Guid.NewGuid().ToString("N")
+                        };
+
+                        e.Client.Session = new UserSession { Username = loginRes.user, SID = loginRes.sid };
+
+                        e.Client.Send(loginRes);
+                        break;
+
+                    case MessageId.Text:
+                        var srv = s as ChatServer;
+                        var message = e.Message.content as MChatPayload;
+                        var textRes = new MChatResponse
+                        {
+                            user = e.Client.Session.Username,
+                            payload = message
+                        };
+
+                        srv.SendMessageToAllOthers(e.Client, textRes);
+                        break;
+                }
+
+                Console.WriteLine($"{e.Client.Session.Username}: {e.Message.ToString()}");
             };
 
             Task serverTask = _WaitForServer(server);

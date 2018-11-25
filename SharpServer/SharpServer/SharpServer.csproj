@@ -33,6 +33,9 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="Newtonsoft.Json, Version=11.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
+      <HintPath>..\packages\Newtonsoft.Json.11.0.2\lib\net45\Newtonsoft.Json.dll</HintPath>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Xml.Linq" />
@@ -46,6 +49,14 @@
     <Compile Include="ChatServer.cs" />
     <Compile Include="ClientMessageEventArgs.cs" />
     <Compile Include="ConnectedEndPoint.cs" />
+    <Compile Include="Messages\MBasicMessage.cs" />
+    <Compile Include="Messages\MBasicResponse.cs" />
+    <Compile Include="Messages\MChatPayload.cs" />
+    <Compile Include="Messages\MChatResponse.cs" />
+    <Compile Include="Messages\MessageId.cs" />
+    <Compile Include="Messages\MIncommingMessage.cs" />
+    <Compile Include="Messages\MLoginPayload.cs" />
+    <Compile Include="Messages\MLoginResponse.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="StatusEventArgs.cs" />
@@ -53,6 +64,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
+    <None Include="packages.config" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
