@@ -13,13 +13,18 @@ namespace SharpClient
     /// </summary>
     public sealed class ConnectedEndPoint : IDisposable
     {
+        private const int MAX_LEN = 10;
+        private const int MAX_BUFFER = 1024;
+        private const int MAX_UNCOMPRESSED = 256;
+
         private readonly object _lock = new object();
         private readonly Socket _socket;
         private readonly Stream _stream;
         private bool _closing;
-        private const int MAX_LEN = 10;
-        private const int MAX_BUFFER = 1024;
-        private const int MAX_UNCOMPRESSED = 256;
+
+        public UserSession Session { get; set; } = null;
+
+        public Boolean IsLoggedIn { get { return Session != null; } }
 
         /// <summary>
         /// Gets the address of the connected remote end-point

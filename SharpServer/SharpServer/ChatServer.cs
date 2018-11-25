@@ -27,7 +27,12 @@ namespace SharpServer
         /// <summary>
         /// Raised when the server has status to report
         /// </summary>
-        public event EventHandler<StatusEventArgs> Status;
+        public event EventHandler<StatusEventArgs> LogStatus;
+
+        /// <summary>
+        /// Raised when the server receives a new message
+        /// </summary>
+        public event EventHandler<ClientMessageEventArgs> OnNewMessage;
 
         /// <summary>
         /// Constructor
@@ -153,7 +158,10 @@ namespace SharpServer
 
         private void _ClientReadLine(ConnectedEndPoint readClient, string text)
         {
-            _OnStatus($"Client {readClient.RemoteEndPoint}: \"{text}\"");
+            if (readClient.IsLoggedIn)
+                _OnNewMessage(readClient, text);
+            else
+                _OnStatus($"Client {readClient.RemoteEndPoint}: \"{text}\"");
 
             lock (_lock)
             {
@@ -196,7 +204,12 @@ namespace SharpServer
 
         private void _OnStatus(string statusText)
         {
-            Status?.Invoke(this, new StatusEventArgs(statusText));
+            LogStatus?.Invoke(this, new StatusEventArgs(statusText));
+        }
+
+        private void _OnNewMessage(ConnectedEndPoint client, string message)
+        {
+            OnNewMessage?.Invoke(this, new ClientMessageEventArgs(client, message));
         }
 
         private void _OnClientException(ConnectedEndPoint client, string message)

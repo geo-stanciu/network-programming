@@ -16,7 +16,15 @@ namespace SharpServer
         {
             ChatServer server = new ChatServer(port);
 
-            server.Status += (s, e) => Console.WriteLine(e.StatusText);
+            server.LogStatus += (s, e) =>
+            {
+                Console.WriteLine(e.StatusText);
+            };
+
+            server.OnNewMessage += (s, e) =>
+            {
+                Console.WriteLine($"{e.Client.Session.Username}: {e.Message}");
+            };
 
             Task serverTask = _WaitForServer(server);
 
