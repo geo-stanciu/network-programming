@@ -32,7 +32,8 @@ namespace SharpClient
                         break;
 
                     case MessageId.Text:
-                        Console.WriteLine(s);
+                        var message = iem.content as MChatPayload;
+                        Console.WriteLine($"{iem.user}: {message.message}");
                         break;
 
                     default:
@@ -45,6 +46,44 @@ namespace SharpClient
             _SafeWaitOnServerRead(server).Wait();
         }
 
+        private static MLoginPayload getUserAndPassword()
+        {
+            var res = new MLoginPayload();
+
+            Console.Write("User: ");
+            res.username = Console.ReadLine();
+
+            Console.Write("Password: ");
+            string pass = "";
+            do
+            {
+                ConsoleKeyInfo key = Console.ReadKey(true);
+                if (key.Key != ConsoleKey.Backspace && key.Key != ConsoleKey.Enter)
+                {
+                    pass += key.KeyChar;
+                    Console.Write("*");
+                }
+                else
+                {
+                    if (key.Key == ConsoleKey.Backspace && pass.Length > 0)
+                    {
+                        pass = pass.Substring(0, (pass.Length - 1));
+                        Console.Write("\b \b");
+                    }
+                    else if (key.Key == ConsoleKey.Enter)
+                    {
+                        break;
+                    }
+                }
+            } while (true);
+
+            res.password = pass;
+
+            Console.Write(Environment.NewLine);
+
+            return res;
+        }
+
         private static void _StartUserInput(ConnectedEndPoint server)
         {
             // Get user input in a new thread, so main thread can handle waiting
@@ -53,15 +92,7 @@ namespace SharpClient
             {
                 try
                 {
-                    var loginCmd = new MLoginCommand
-                    {
-                        payload = new MLoginPayload
-                        {
-                            username = "test1",
-                            password = "pass1"
-                        }
-                    };
-
+                    var loginCmd = new MLoginCommand { payload = getUserAndPassword() };
                     server.Send(loginCmd);
 
                     string line;
