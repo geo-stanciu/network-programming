@@ -14,7 +14,7 @@ namespace SharpServer
     /// </summary>
     public sealed class ConnectedEndPoint : IDisposable
     {
-        private const int MAX_LEN = 10;
+        private const int MAX_LEN = 11;
         private const int MAX_BUFFER = 1024;
         private const int MAX_UNCOMPRESSED = 256;
 
@@ -102,7 +102,7 @@ namespace SharpServer
                         shouldCompress = true;
 
                     byte[] buff = shouldCompress ? Compress(Encoding.UTF8.GetBytes(message)) : Encoding.UTF8.GetBytes(message);
-                    byte[] len = Encoding.UTF8.GetBytes(buff.Length.ToString().PadLeft(MAX_LEN, '0'));
+                    byte[] len = Encoding.UTF8.GetBytes(buff.Length.ToString().PadLeft(MAX_LEN-1, '0'));
                     byte[] msg = new byte[len.Length + buff.Length + 1];
 
                     Array.Copy(len, 0, msg, 0, len.Length);
@@ -204,53 +204,74 @@ namespace SharpServer
 
         private async Task _ConsumeSocketAsync(Action<ConnectedEndPoint, string> callback)
         {
-            int read = 0;
-            int offset = 0;
+            int read = -1;
+            int len = MAX_LEN - 1;
+            int min = 0;
+            int min2 = 0;
             int totalRead = 0;
-            int max2read = MAX_LEN + 1;
+            int offset = 0;
             bool lenReceived = false;
             bool isCompressed = false;
             var buffer = new byte[MAX_BUFFER];
+            byte[] blen = new byte[len];
             byte[] msg = null;
 
             try
             {
-                while ((read = await _stream.ReadAsync(buffer, offset, GetMin(buffer.Length, max2read - totalRead))) != 0)
+                while (true)
                 {
-                    if (!lenReceived)
-                    {
-                        totalRead += read;
-                        offset += read;
+                    offset = 0;
+                    read = await _stream.ReadAsync(buffer, 0, buffer.Length);
 
-                        if (offset >= max2read)
+                    if (read == 0)
+                        break;
+
+                    while (offset < read)
+                    {
+                        if (!lenReceived)
                         {
-                            lenReceived = true;
-                            offset = 0;
+                            min = len - totalRead;
+                            min2 = read - offset;
+                            if (min2 < min)
+                                min = min2;
+
+                            Array.Copy(buffer, offset, blen, totalRead, min);
+                            offset += min;
+                            totalRead += min;
+
+                            if (totalRead >= len)
+                            {
+                                lenReceived = true;
+                                totalRead = 0;
+
+                                isCompressed = buffer[offset++] == 1;
+
+                                len = Int32.Parse(Encoding.UTF8.GetString(blen));
+                                msg = new byte[len];
+                            }
+                            else
+                            {
+                                continue;
+                            }
+                        }
+
+                        min = len - totalRead;
+                        min2 = read - offset;
+                        if (min2 < min)
+                            min = min2;
+
+                        Array.Copy(buffer, offset, msg, totalRead, min);
+                        offset += min;
+                        totalRead += min;
+
+                        if (totalRead == len)
+                        {
+                            lenReceived = false;
+                            len = MAX_LEN - 1;
                             totalRead = 0;
 
-                            isCompressed = buffer[MAX_LEN] == 1;
-
-                            var len = new byte[MAX_LEN];
-                            Array.Copy(buffer, 0, len, 0, len.Length);
-                            max2read = Int32.Parse(Encoding.UTF8.GetString(len));
-
-                            msg = new byte[max2read];
-                        }
-                    }
-                    else if (totalRead < max2read)
-                    {
-                        Array.Copy(buffer, 0, msg, totalRead, read);
-                        totalRead += read;
-
-                        if (totalRead == max2read)
-                        {
                             string message = Encoding.UTF8.GetString(isCompressed ? Decompress(msg) : msg);
                             msg = null;
-
-                            totalRead = 0;
-                            max2read = MAX_LEN + 1;
-                            lenReceived = false;
-                            isCompressed = false;
 
                             callback(this, message);
                         }

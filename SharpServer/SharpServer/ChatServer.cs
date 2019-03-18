@@ -223,7 +223,11 @@ namespace SharpServer
             lock (_lock)
             {
                 _clients.Remove(client);
-                _OnStatus($"removed client {client.RemoteEndPoint} -- {_clients.Count} clients connected");
+
+                if (client.IsLoggedIn)
+                    _OnStatus($"removed client {client.Session.Username} -- {_clients.Count} clients connected");
+                else
+                    _OnStatus($"removed client {client.RemoteEndPoint} -- {_clients.Count} clients connected");
             }
         }
 

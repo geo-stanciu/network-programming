@@ -44,6 +44,8 @@ namespace SharpClient
 
             _StartUserInput(server);
             _SafeWaitOnServerRead(server).Wait();
+
+            String x = "aici";
         }
 
         private static MLoginPayload getUserAndPassword()
@@ -97,7 +99,7 @@ namespace SharpClient
 
                     string line;
 
-                    while ((line = Console.ReadLine()) != "")
+                    while ((line = Console.ReadLine()) != "exit")
                     {
                         var text = new MChatMessage
                         {
